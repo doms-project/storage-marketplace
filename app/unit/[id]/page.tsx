@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { StorageUnit } from '@/types/database';
+import { getDefaultImage } from '@/lib/images';
 
 export default function UnitDetail() {
   const params = useParams();
@@ -85,17 +86,16 @@ export default function UnitDetail() {
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           {/* Image */}
           <div className="relative h-96 bg-gray-200">
-            {unit.image_url ? (
-              <img
-                src={unit.image_url}
-                alt={unit.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400 text-xl">
-                No Image Available
-              </div>
-            )}
+            <img
+              src={unit.image_url || getDefaultImage(unit.unit_type)}
+              alt={unit.title}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // Fallback to default image if user's image fails to load
+                const target = e.target as HTMLImageElement;
+                target.src = getDefaultImage(unit.unit_type);
+              }}
+            />
           </div>
 
           {/* Content */}

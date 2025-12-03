@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { StorageUnit } from '@/types/database';
+import { getSuggestions } from '@/lib/cities';
+import { getDefaultImage } from '@/lib/images';
+
+// Force dynamic rendering to prevent build-time errors
+export const dynamic = 'force-dynamic';
 
 export default function Home() {
   const [units, setUnits] = useState<StorageUnit[]>([]);
@@ -11,6 +16,9 @@ export default function Home() {
   const [searchCity, setSearchCity] = useState('');
   const [filterType, setFilterType] = useState('');
   const [loading, setLoading] = useState(true);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchUnits();
@@ -19,6 +27,30 @@ export default function Home() {
   useEffect(() => {
     filterUnits();
   }, [units, searchCity, filterType]);
+
+  // Handle autocomplete suggestions
+  useEffect(() => {
+    if (searchCity.trim()) {
+      const newSuggestions = getSuggestions(searchCity);
+      setSuggestions(newSuggestions);
+      setShowSuggestions(newSuggestions.length > 0);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [searchCity]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchUnits = async () => {
     try {
@@ -65,6 +97,12 @@ export default function Home() {
   const clearFilters = () => {
     setSearchCity('');
     setFilterType('');
+    setShowSuggestions(false);
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setSearchCity(suggestion);
+    setShowSuggestions(false);
   };
 
   const unitTypes = Array.from(new Set(units.map((unit) => unit.unit_type)));
@@ -104,7 +142,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
+            <div className="relative" ref={searchRef}>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Search by City or Zip Code
               </label>
@@ -113,8 +151,25 @@ export default function Home() {
                 placeholder="Enter city or zip code..."
                 value={searchCity}
                 onChange={(e) => setSearchCity(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                onFocus={() => {
+                  if (suggestions.length > 0) setShowSuggestions(true);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-black bg-white"
               />
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none text-black"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -123,7 +178,7 @@ export default function Home() {
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-black bg-white"
               >
                 <option value="">All Types</option>
                 {unitTypes.map((type) => (
@@ -180,17 +235,16 @@ export default function Home() {
                 className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow"
               >
                 <div className="relative h-48 bg-gray-200">
-                  {unit.image_url ? (
-                    <img
-                      src={unit.image_url}
-                      alt={unit.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                      No Image
-                    </div>
-                  )}
+                  <img
+                    src={unit.image_url || getDefaultImage(unit.unit_type)}
+                    alt={unit.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to default image if user's image fails to load
+                      const target = e.target as HTMLImageElement;
+                      target.src = getDefaultImage(unit.unit_type);
+                    }}
+                  />
                 </div>
                 <div className="p-4">
                   <h3 className="text-xl font-semibold mb-2 text-gray-900">
