@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { StorageUnit } from '@/types/database';
 
+// Force dynamic rendering to prevent build-time errors
+export const dynamic = 'force-dynamic';
+
 export default function Home() {
   const [units, setUnits] = useState<StorageUnit[]>([]);
   const [filteredUnits, setFilteredUnits] = useState<StorageUnit[]>([]);
