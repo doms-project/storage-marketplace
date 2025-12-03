@@ -10,6 +10,7 @@ export default function Home() {
   const [filteredUnits, setFilteredUnits] = useState<StorageUnit[]>([]);
   const [searchCity, setSearchCity] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchUnits();
@@ -21,6 +22,7 @@ export default function Home() {
 
   const fetchUnits = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('storage_units')
         .select('*')
@@ -28,28 +30,41 @@ export default function Home() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUnits(data || []);
+      const fetchedUnits = data || [];
+      setUnits(fetchedUnits);
+      // Initialize filteredUnits with all units
+      setFilteredUnits(fetchedUnits);
     } catch (error) {
       console.error('Error fetching units:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const filterUnits = () => {
-    let filtered = units;
+    let filtered = [...units];
 
-    if (searchCity) {
+    // Search by city or zip code (case-insensitive, trimmed)
+    if (searchCity.trim()) {
+      const searchTerm = searchCity.trim().toLowerCase();
       filtered = filtered.filter(
         (unit) =>
-          unit.location_city.toLowerCase().includes(searchCity.toLowerCase()) ||
-          unit.location_zip.includes(searchCity)
+          unit.location_city.toLowerCase().includes(searchTerm) ||
+          unit.location_zip.includes(searchTerm)
       );
     }
 
+    // Filter by unit type
     if (filterType) {
       filtered = filtered.filter((unit) => unit.unit_type === filterType);
     }
 
     setFilteredUnits(filtered);
+  };
+
+  const clearFilters = () => {
+    setSearchCity('');
+    setFilterType('');
   };
 
   const unitTypes = Array.from(new Set(units.map((unit) => unit.unit_type)));
@@ -88,7 +103,7 @@ export default function Home() {
       {/* Search and Filter */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Search by City or Zip Code
@@ -119,16 +134,42 @@ export default function Home() {
               </select>
             </div>
           </div>
+          {(searchCity || filterType) && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                Showing {filteredUnits.length} of {units.length} units
+              </p>
+              <button
+                onClick={clearFilters}
+                className="text-sm text-red-600 hover:text-red-700 font-medium"
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Units Grid */}
-        {filteredUnits.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+            <p className="mt-4 text-gray-500">Loading storage units...</p>
+          </div>
+        ) : filteredUnits.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">
               {units.length === 0
                 ? 'No storage units available at the moment.'
                 : 'No units match your search criteria.'}
             </p>
+            {(searchCity || filterType) && (
+              <button
+                onClick={clearFilters}
+                className="mt-4 text-red-600 hover:text-red-700 font-medium"
+              >
+                Clear filters to see all units
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
